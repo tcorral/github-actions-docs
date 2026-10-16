@@ -72,7 +72,7 @@ Every document must cover these things (they are the point of the skill):
 3. **How it is triggered** – events with filters and cron in words; for actions, who calls them and how.
 4. **How it is configured** – inputs, secrets, variables, env, permissions, runners.
 5. **Configuration examples** – real ones from the repo first, labelled with source.
-6. **Dependency graph** – start from the inventory's `dependency_graph`.
+6. **Dependency graph** – start from the inventory's `dependency_graph`. For a local action with no incoming callers (`used_by`) and no outgoing dependencies (`depends_on` or `external_dependencies`), keep the `## Dependency graph` section but a Mermaid flowchart is optional. Instead, write an explicit `Not applicable: this action has no dependencies or callers.` line. This exception applies only when both sides are empty; an unused action can still have outgoing dependencies and must show them. All other items must include the graph.
 7. **Sequence diagram** – written by you; see `references/mermaid-guide.md`. Skip only with an explicit
    `Not applicable: <reason>` line (rules for skipping are in the guide). Prefer including it for multi-job
    workflows, anything calling other workflows/actions, and composite actions with ≥ 3 steps.
