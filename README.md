@@ -84,9 +84,13 @@ sequenceDiagram
 
 ## Requirements
 
+For normal skill use:
+
 - [Claude Code](https://claude.com/product/claude-code)
 - Python 3 and [PyYAML](https://pypi.org/project/pyyaml/) (`pip install pyyaml`)
 - *Optional:* Node.js and npm, used by the validator to check diagrams with the real Mermaid parser. It installs `mermaid` and `jsdom` once into `~/.cache/github-actions-docs-mermaid`.
+
+For the **Promptfoo evaluation suite**, also install Node.js 20+ and npm, plus an authenticated Claude Code CLI. See [Evaluating the skill with Promptfoo](#evaluating-the-skill-with-promptfoo).
 
 ## Installation
 
@@ -177,6 +181,13 @@ Run these from inside the repository, or pass `--root /path/to/repo` to the scan
 github-actions-docs/
 ├── SKILL.md                   instructions Claude follows (entry point of the skill)
 ├── README.md                  this file
+├── package.json               Promptfoo dependency and npm scripts
+├── promptfooconfig.yaml       Promptfoo evaluation scenarios
+├── evals/
+│   ├── README.md               detailed evaluation instructions
+│   ├── provider.cjs            runs the skill through Claude Code
+│   ├── assertions.cjs          checks generated documentation
+│   └── fixtures/example/       example repository (.github/ is hidden)
 ├── scripts/
 │   ├── scan_github.py         inventory + dependency graphs
 │   ├── validate_docs.py       completeness and diagram checks
@@ -205,11 +216,117 @@ github-actions-docs/
 | A workflow's doc says it could not be parsed | Fix the YAML error shown in the scanner warning, then regenerate |
 | Skill does not trigger | Check that `SKILL.md` is at `~/.claude/skills/github-actions-docs/SKILL.md` (or the project-level equivalent), then restart Claude Code |
 
+## Evaluating the skill with Promptfoo
+
+This repository includes an end-to-end evaluation suite using [Promptfoo](https://www.promptfoo.dev/). It runs the **actual Claude Code skill** against a small GitHub Actions fixture repository and checks the **Markdown files written to disk**, not just Claude's final chat response. It is intended to catch behavioral regressions when `SKILL.md`, templates, or supporting scripts change.
+
+### Prerequisites and setup
+
+Install **Node.js 20 or later**, npm, Python 3 with PyYAML, and the [Claude Code CLI](https://code.claude.com/docs/en/overview). Authenticate Claude Code with an account that has model access.
+
+From the root of this repository:
+
+```bash
+python3 -m pip install pyyaml
+claude --version
+npm install
+```
+
+If Claude Code is not authenticated, run `claude` interactively and complete the sign-in flow before evaluating. The suite uses your Claude Code authentication; a separate Promptfoo API provider or `ANTHROPIC_API_KEY` is not required for this setup. Model calls may incur costs or consume plan usage.
+
+### Run the evaluations
+
+From the root of the **skill repository** (not the fixture):
+
+```bash
+npm run eval
+```
+
+This is equivalent to:
+
+```bash
+npx promptfoo eval -c promptfooconfig.yaml --no-cache
+```
+
+The `--no-cache` flag reruns Claude Code rather than reusing cached responses. After the evaluation, inspect the results in Promptfoo's viewer:
+
+```bash
+npm run eval:view
+```
+
+Or run `npx promptfoo view` directly. The results indicate which assertions passed or failed, along with diagnostic details. A passing run means the defined assertions passed; it is not a guarantee of all possible documentation correctness.
+
+### Scenarios and expectations
+
+The suite currently contains **three end-to-end scenarios**, defined in `promptfooconfig.yaml`:
+
+| Scenario | Expected behavior |
+|----------|-------------------|
+| Full repository documentation | Generate an index and documentation for all five workflows and four local actions, with source-faithful triggers, dependencies, configuration, links and diagrams. |
+| Custom output directory | Generate documentation under `docs/ci-reference/`, as requested, rather than the default directory. |
+| Regeneration | Regenerate existing documentation while preserving the content inside `<!-- manual:start -->` and `<!-- manual:end -->`. |
+
+The fixture at `evals/fixtures/example/` exercises reusable workflows, nested composite actions, `workflow_run` chaining, matrix jobs, scheduled runs, secrets and variables, permissions, external action pinning, a broken local action reference, and an unused local action. **Its `.github/` directory is hidden by default** in some file explorers. Verify its contents with:
+
+```bash
+find evals/fixtures/example -type f
+```
+
+### How the suite works
+
+1. `evals/provider.cjs` copies the fixture to a temporary directory for each test case.
+2. It links the current checkout of this skill into the fixture's `.claude/skills/github-actions-docs/` directory.
+3. It invokes the authenticated `claude` CLI with the request from `promptfooconfig.yaml`.
+4. It collects the generated Markdown under the scenario's selected output directory.
+5. `evals/assertions.cjs` checks the collected files against coverage, structure, and source-specific expectations.
+6. Promptfoo reports the assertion results.
+
+The tests are **behavioral**, not exact prose snapshots. Legitimate wording differences are acceptable when the asserted facts and documentation structure are present. The assertions cannot establish complete semantic correctness or verify that the workflows themselves execute successfully.
+
+### Debugging evaluation failures
+
+Keep the temporary fixture copies for inspection:
+
+```bash
+SKILL_EVAL_KEEP_WORKDIR=1 npm run eval
+```
+
+The provider prints the retained temporary working directories to standard error. Inspect the generated Markdown there to diagnose missing pages or incorrect assertions.
+
+If Claude Code needs more time, increase the per-scenario timeout (milliseconds; the default is `600000`, or 10 minutes):
+
+```bash
+SKILL_EVAL_TIMEOUT_MS=900000 npm run eval
+```
+
+If a case fails before generating documentation, verify `claude --version`, authentication, Python/PyYAML availability, and the error output shown by Promptfoo. See [`evals/README.md`](evals/README.md) for additional details.
+
+### Validation beyond Promptfoo
+
+Promptfoo checks selected end-to-end expectations. The deterministic validator independently checks required sections, links, document coverage, and Mermaid structure. When validating a generated repository, run the scanner **in that target repository**, then point the validator at the resulting inventory and docs:
+
+```bash
+python3 /path/to/github-actions-docs/scripts/scan_github.py \
+  --out /tmp/gha-inventory.json
+python3 /path/to/github-actions-docs/scripts/validate_docs.py \
+  --inventory /tmp/gha-inventory.json \
+  --docs docs/github-automation \
+  --mermaid
+```
+
+The `--mermaid` option checks diagrams with the actual Mermaid parser if the required Node/npm tooling is available. This validator is a complementary check, not a replacement for evaluating Claude's behavior.
+
+### Security
+
+The evaluation provider invokes Claude Code with **`--dangerously-skip-permissions`** to avoid interactive approvals. Run the suite only with **trusted fixtures in an isolated development environment**, without unnecessary credentials. Do not run it automatically against untrusted pull-request content. The fixture does not need real deployment tokens or webhook secrets.
+
+### Extending the suite
+
+When introducing a feature or fixing a regression, add representative workflows/actions under `evals/fixtures/example/`, a case in `promptfooconfig.yaml` if needed, and source-grounded expectations in `evals/assertions.cjs`. Update `evals/provider.cjs` only for scenarios that require different setup or output collection. Prefer checking observable facts and behavior instead of exact prose, then run `npm run eval` again.
+
 ## Contributing
 
-Issues and pull requests are welcome. When changing the scanner, test it on a repository that exercises reusable
-workflows, nested composite actions, `workflow_run` chains and at least one broken reference, then confirm that
-`validate_docs.py --mermaid` passes on the generated docs.
+When changing `SKILL.md`, the documentation templates or supporting scripts, run `npm run eval` to check for behavioral regressions. When changing the scanner, also test it on a repository that exercises reusable workflows, nested composite actions, `workflow_run` chains and at least one broken reference, then confirm that `validate_docs.py --mermaid` passes on the generated docs. Both checks are complementary and should pass before submitting a pull request.
 
 ## License
 

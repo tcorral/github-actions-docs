@@ -1,0 +1,11 @@
+{
+  "name": "github-actions-docs-evals",
+  "private": true,
+  "scripts": {
+    "eval": "promptfoo eval -c promptfooconfig.yaml --no-cache -j 1",
+    "eval:view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.118.0"
+  }
+}

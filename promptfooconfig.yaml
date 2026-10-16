@@ -1,0 +1,28 @@
+description: GitHub Actions docs skill end-to-end evaluation
+providers:
+  - id: file://evals/provider.cjs
+    label: claude-code-github-actions-docs
+prompts:
+  - '{{request}}'
+tests:
+  - description: Full repository documentation and dependency fidelity
+    vars:
+      scenario: full
+      request: Document every GitHub Actions workflow and local action in this repository using the github-actions-docs skill. Write the documentation in docs/github-automation.
+    assert:
+      - type: javascript
+        value: file://evals/assertions.cjs
+  - description: Alternate output directory
+    vars:
+      scenario: custom-dir
+      request: Document all GitHub Actions workflows and actions using the github-actions-docs skill. Write the generated documentation to docs/ci-reference, not the default location.
+    assert:
+      - type: javascript
+        value: file://evals/assertions.cjs
+  - description: Regenerate preserving manual sections
+    vars:
+      scenario: regenerate
+      request: Regenerate the GitHub Actions and local action documentation in docs/github-automation using the github-actions-docs skill. Preserve human-maintained manual sections.
+    assert:
+      - type: javascript
+        value: file://evals/assertions.cjs

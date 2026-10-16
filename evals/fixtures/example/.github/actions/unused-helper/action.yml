@@ -1,0 +1,7 @@
+name: Unused helper
+description: Not referenced anywhere
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo hi

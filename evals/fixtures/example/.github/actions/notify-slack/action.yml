@@ -1,0 +1,15 @@
+name: Notify Slack
+description: Post a message to a Slack incoming webhook
+inputs:
+  webhook:
+    description: Slack incoming webhook URL
+    required: true
+  message:
+    description: Message text
+    required: true
+runs:
+  using: node20
+  main: dist/index.js
+branding:
+  icon: bell
+  color: blue

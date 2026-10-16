@@ -1,0 +1,13 @@
+name: Nightly
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+jobs:
+  trigger-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run ci.yml --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/missing-action

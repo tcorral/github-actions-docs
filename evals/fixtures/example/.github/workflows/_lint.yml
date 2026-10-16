@@ -1,0 +1,33 @@
+name: Lint (reusable)
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version used for linting
+        type: string
+        default: '3.11'
+    secrets:
+      SONAR_TOKEN:
+        required: false
+        description: Token for SonarCloud analysis
+    outputs:
+      lint-status:
+        description: pass or fail
+        value: ${{ jobs.lint.outputs.status }}
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+      - run: pip install ruff && ruff check .
+      - id: result
+        run: echo "status=pass" >> "$GITHUB_OUTPUT"
+      - if: ${{ secrets.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -1,0 +1,24 @@
+name: Setup project
+description: Install Node, restore dependency cache and install packages
+inputs:
+  node-version:
+    description: Node.js version
+    required: false
+    default: '20'
+  install-command:
+    description: Command used to install dependencies
+    default: npm ci
+outputs:
+  cache-hit:
+    description: Whether the cache was restored
+    value: ${{ steps.deps.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - id: deps
+      uses: ./.github/actions/cache-deps
+    - shell: bash
+      run: ${{ inputs.install-command }}
